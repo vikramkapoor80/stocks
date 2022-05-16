@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stockticker-secret
+type: Opaque
+data:
+  APIKEY: C227WD9W3LUVKVV9
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stockticker-configmap
+data:
+  SYMBOL: MSFT
+  NDAYS: 7
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: stockticker
+  name: stockticker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: stockticker
+  template:
+    metadata:
+      labels:
+        app: stockticker
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - image: username/stockticekr
+        name: stockticker
+        env:
+        - name: APIKEY
+          ValueFrom:
+            secretKeyRef:
+              name: stockticker-secret
+              value: APIKEY
+        - name: SYMBOL
+          ValueFrom:
+            secretKeyRef:
+              name: stockticker-configmap
+              value: SYMBOL
+        - name: NDAYS
+          ValueFrom:
+            secretKeyRef:
+              name: stockticker-configmap
+              value: NDAYS
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 100m
+            memory: 256Mi
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 20
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stockticker
+  labels:
+    app: stockticker
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    name: http
+    targetPort: 5000
+  selector:
+    app: stockticker
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: stockticker
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        backend:
+          serviceName: stockticker
+          servicePort: 80
